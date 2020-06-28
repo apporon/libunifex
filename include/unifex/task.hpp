@@ -47,7 +47,7 @@ template <typename Sender>
 UNIFEX_CONCEPT_FRAGMENT(     //
   _single_typed_sender_impl, //
     requires()(0) &&         //
-    sender_traits<std::remove_cvref_t<Sender>>
+    sender_traits<remove_cvref_t<Sender>>
       ::template value_types<
         _is_single_valued_variant,
         _is_single_valued_tuple>::value);
@@ -160,7 +160,7 @@ struct _as_await {
   };
 };
 template <typename Sender>
-using _as_awaitable = typename _as_await<std::remove_cvref_t<Sender>>::type;
+using _as_awaitable = typename _as_await<remove_cvref_t<Sender>>::type;
 
 struct with_awaitable_senders {
   template <typename Sender>

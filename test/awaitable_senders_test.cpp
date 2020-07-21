@@ -27,7 +27,7 @@
 
 using namespace unifex;
 
-TEST(awaitable_senders, test) {
+TEST(awaitable_senders, non_void) {
   auto makeTask = [&]() -> task<std::optional<int>> {
     co_return co_await just(42);
   };
@@ -37,6 +37,17 @@ TEST(awaitable_senders, test) {
 
   EXPECT_TRUE(answer.has_value() && answer->has_value());
   EXPECT_EQ(42, **answer);
+}
+
+TEST(awaitable_senders, void) {
+  auto makeTask = [&]() -> task<std::optional<unifex::unit>> {
+    co_return co_await just();
+  };
+
+  std::optional<std::optional<unifex::unit>> answer =
+      sync_wait(awaitable_sender(makeTask()));
+
+  EXPECT_TRUE(answer.has_value() && answer->has_value());
 }
 
 #endif  // UNIFEX_NO_COROUTINES

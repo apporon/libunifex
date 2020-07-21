@@ -15,8 +15,6 @@
  */
 #pragma once
 
-#include <optional>
-
 #include <unifex/async_trace.hpp>
 #include <unifex/manual_lifetime.hpp>
 #include <unifex/coroutine.hpp>
@@ -86,20 +84,16 @@ using _result = typename _res<T>::type;
 
 template <typename T>
 struct _rec {
+  static_assert(!std::is_void_v<T>);
   struct type {
     _result<T> *res_;
 
     template(class... Us)
-      (requires constructible_from<T, Us...> || //
-          (std::is_void_v<T> && sizeof...(Us) == 0))
-    void set_value(Us&&... us) && noexcept {
-      try {
-        unifex::activate(res_->value_, (Us&&) us...);
-        res_->state_ = state::value;
-      } catch(...) {
-        unifex::activate(res_->exception_, std::current_exception());
-        res_->state_ = state::exception;
-      }
+      (requires constructible_from<T, Us...>)
+    void set_value(Us&&... us) &&
+        noexcept(std::is_nothrow_constructible_v<T, Us...>) {
+      unifex::activate(res_->value_, (Us&&) us...);
+      res_->state_ = state::value;
       res_->continuation_.resume();
     }
     void set_error(std::exception_ptr eptr) && noexcept {
@@ -124,35 +118,25 @@ struct _as_await {
     connect_result_t<Sender, _receiver_for<Sender>> op_;
 
     explicit type(Sender&& sender)
-        : res_{}
-        , op_{connect((Sender&&) sender, _receiver_for<Sender>{&res_})} {
-    }
+      : res_{}
+      , op_{connect((Sender&&) sender, _receiver_for<Sender>{&res_})} {}
 
     static constexpr bool await_ready() noexcept {
       return false;
     }
 
-    void await_suspend(coro::coroutine_handle<> continuation) {
+    void await_suspend(coro::coroutine_handle<> continuation) noexcept {
       res_.continuation_ = continuation;
       start(op_);
     }
 
-    using await_resume_result_t =
-        conditional_t<std::is_void_v<value_t>, void, std::optional<value_t>>;
-
-    await_resume_result_t await_resume() {
+    std::optional<value_t> await_resume() {
       switch (res_.state_) {
-      case state::value: {
+      case state::value:
         return std::move(res_.value_).get();
-      }
-      case state::done: {
-        if constexpr (std::is_void_v<value_t>) {
-          return;
-        } else {
-          return std::nullopt;
-        }
-      }
-      default:;
+      case state::done:
+        return std::nullopt;
+      default:
         assert(res_.state_ == state::exception);
         std::rethrow_exception(res_.exception_.get());
       }
@@ -312,8 +296,6 @@ public:
   }
 };
 } // namespace _task
-
-using _task::with_awaitable_senders;
 
 template <typename T>
 using task = typename _task::_task<T>::type;
